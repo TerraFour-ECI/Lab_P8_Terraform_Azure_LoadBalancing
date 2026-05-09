@@ -1,0 +1,799 @@
+% ╔══════════════════════════════════════════════════════════════════════════╗
+% ║  ESCUELA COLOMBIANA DE INGENIERÍA JULIO GARAVITO                        ║
+% ║  Software Architecture (ARSW) -- Laboratory No. 8                       ║
+% ║  Terraform on Azure -- Load Balancing & Infrastructure as Code          ║
+% ╚══════════════════════════════════════════════════════════════════════════╝
+
+\documentclass[10pt,a4paper,twocolumn]{article}
+
+% --- Encoding & language ---------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+
+% --- Maths -----------------------------------------------------------------
+\usepackage{amsmath}
+
+% --- Graphics & layout -----------------------------------------------------
+\usepackage{graphicx}
+\usepackage[top=2cm, bottom=2cm, left=1.8cm, right=1.8cm]{geometry}
+\usepackage{fancyhdr}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+
+% --- Code listing ----------------------------------------------------------
+\usepackage{listings}
+
+% --- Colors & boxes --------------------------------------------------------
+\usepackage[dvipsnames]{xcolor}
+\usepackage[most]{tcolorbox}
+
+% --- Hyperlinks ------------------------------------------------------------
+\usepackage{hyperref}
+
+% --- Typography helpers ----------------------------------------------------
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{titlesec}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{array}
+\usepackage{makecell}
+
+% ===========================================================================
+%  COLOUR & STYLE DEFINITIONS
+% ===========================================================================
+\definecolor{darkblue}{RGB}{0,32,96}
+\definecolor{azureblue}{RGB}{0,120,212}
+\definecolor{terraformpurple}{RGB}{123,66,188}
+\definecolor{lightblue}{RGB}{173,216,230}
+\definecolor{codebg}{RGB}{245,245,245}
+\definecolor{darkgreen}{RGB}{0,128,0}
+\definecolor{placeholderbg}{RGB}{240,240,240}
+\definecolor{successgreen}{RGB}{40,167,69}
+\definecolor{warningorange}{RGB}{255,140,0}
+\definecolor{dangerred}{RGB}{220,53,69}
+
+% Section header color
+\titleformat{\section}{\large\bfseries\color{darkblue}}{}{0em}{\thesection\quad}
+\titleformat{\subsection}{\normalsize\bfseries\color{darkblue!80}}{}{0em}{\thesubsection\quad}
+\titlespacing*{\section}{0pt}{10pt}{4pt}
+\titlespacing*{\subsection}{0pt}{8pt}{3pt}
+
+% --- Header / Footer -------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\textcolor{darkblue}{\textbf{Software Architecture}}}
+\rhead{\textcolor{darkblue}{Lab 08 -- Terraform Azure Load Balancing}}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Code Listing Styles ---------------------------------------------------
+\lstdefinestyle{hclcode}{
+    backgroundcolor=\color{codebg},
+    basicstyle=\ttfamily\scriptsize,
+    keywordstyle=\color{terraformpurple}\bfseries,
+    commentstyle=\color{gray}\itshape,
+    stringstyle=\color{darkgreen},
+    numberstyle=\tiny\color{gray},
+    numbers=left,
+    stepnumber=1,
+    numbersep=5pt,
+    frame=single,
+    framerule=0.4pt,
+    rulecolor=\color{gray!50},
+    breaklines=true,
+    showstringspaces=false,
+    tabsize=2,
+    captionpos=b,
+    xleftmargin=10pt,
+    xrightmargin=5pt,
+    aboveskip=6pt,
+    belowskip=6pt,
+    morekeywords={resource,module,variable,output,provider,terraform,
+                  required_providers,required_version,backend,locals,
+                  data,for,in,if,else,true,false,null,for_each,count,
+                  source,version,type,default,description,sensitive,
+                  validation,condition,error_message},
+    morecomment=[l]{\#}
+}
+\lstdefinestyle{yamlcode}{
+    backgroundcolor=\color{codebg},
+    basicstyle=\ttfamily\scriptsize,
+    keywordstyle=\color{azureblue}\bfseries,
+    commentstyle=\color{gray}\itshape,
+    stringstyle=\color{Brown},
+    frame=single, framerule=0.4pt, rulecolor=\color{gray!50},
+    breaklines=true, showstringspaces=false, tabsize=2,
+    captionpos=b, xleftmargin=10pt, aboveskip=6pt, belowskip=6pt,
+    morecomment=[l]{\#}
+}
+\lstdefinestyle{shellcode}{
+    backgroundcolor=\color{black!90},
+    basicstyle=\ttfamily\scriptsize\color{white},
+    keywordstyle=\color{cyan}\bfseries,
+    commentstyle=\color{gray}\itshape,
+    stringstyle=\color{yellow},
+    frame=single, framerule=0.4pt, rulecolor=\color{gray!50},
+    breaklines=true, showstringspaces=false, tabsize=2,
+    captionpos=b, xleftmargin=10pt, aboveskip=6pt, belowskip=6pt,
+    morekeywords={az,terraform,curl,export,echo,cd,ssh,ssh-keygen,git,gh},
+    morecomment=[l]{\#}
+}
+
+% --- Custom tcolorbox environments -----------------------------------------
+\tcbset{
+    conceptbox/.style={
+        colback=blue!5!white, colframe=darkblue,
+        coltitle=white, colbacktitle=darkblue,
+        title={\textbf{Concept}}, fonttitle=\bfseries\small,
+        boxrule=0.8pt, before skip=8pt, after skip=8pt,
+        left=4pt, right=4pt, top=6pt, bottom=6pt, breakable
+    },
+    resultbox/.style={
+        colback=green!5!white, colframe=successgreen,
+        coltitle=white, colbacktitle=successgreen,
+        title={\textbf{Result}}, fonttitle=\bfseries\small,
+        boxrule=0.8pt, before skip=8pt, after skip=8pt,
+        left=4pt, right=4pt, top=6pt, bottom=6pt, breakable
+    },
+    note/.style={
+        colback=yellow!10!white, colframe=warningorange,
+        coltitle=white, colbacktitle=warningorange,
+        title={\textbf{Note}}, fonttitle=\bfseries\small,
+        boxrule=0.8pt, before skip=8pt, after skip=8pt,
+        left=4pt, right=4pt, top=6pt, bottom=6pt, breakable
+    },
+    warningbox/.style={
+        colback=red!5!white, colframe=dangerred,
+        colbacktitle=dangerred, coltitle=white,
+        title={\textbf{Key Design Decision}}, fonttitle=\bfseries\small,
+        boxrule=0.8pt, before skip=8pt, after skip=8pt,
+        left=4pt, right=4pt, top=6pt, bottom=6pt, breakable
+    }
+}
+\newtcolorbox{conceptbox}[1][]{conceptbox, #1}
+\newtcolorbox{resultbox}[1][]{resultbox, #1}
+\newtcolorbox{note}[1][]{note, #1}
+\newtcolorbox{warningbox}[1][]{warningbox, #1}
+
+% --- Image helper ----------------------------------------------------------
+\newcommand{\imgplaceholder}[2]{%
+    \IfFileExists{#2}{%
+        \includegraphics[height=#1,width=\linewidth,keepaspectratio]{#2}%
+    }{%
+        \begin{tcolorbox}[
+            colback=placeholderbg, colframe=gray!60,
+            height=#1, valign=center, halign=center,
+            fontupper=\small\ttfamily\color{gray!70},
+            boxrule=0.5pt, left=2pt, right=2pt
+        ]
+            #2
+        \end{tcolorbox}%
+    }%
+}
+
+\setlist[itemize]{leftmargin=15pt, itemsep=2pt, parsep=0pt, topsep=5pt}
+\setlist[enumerate]{leftmargin=15pt, itemsep=2pt, parsep=0pt, topsep=5pt}
+\captionsetup{font=small, labelfont=bf, format=hang, indention=0pt, margin=10pt}
+\hypersetup{colorlinks=true, linkcolor=darkblue, urlcolor=darkblue,
+            citecolor=darkblue, pdfborder={0 0 0}}
+
+% ----------------------- TITLE PAGE ----------------------------------------
+\title{\vspace{-1cm}
+    \begin{center}
+        \imgplaceholder{3cm}{media/university_logo.png}
+    \end{center}
+    \vspace{1.5cm}
+    \textbf{\Large Software Architecture Laboratory}\\
+    \vspace{1cm}
+    \textbf{\huge Laboratory No. 8}\\
+    \textbf{\huge Infrastructure as Code with Terraform on Azure}\\
+    \vspace{1.5cm}
+    \large Public Load Balancer / Linux VMs / Remote State / GitHub Actions OIDC
+}
+
+\author{
+    \vspace{2cm}
+    \textbf{Students:}\\[0.05cm]
+    Andersson David S\'{a}nchez M\'{e}ndez\\[0.3cm]
+    Cristian Santiago Pedraza Rodr\'{i}guez\\[0.3cm]
+    Elizabeth Correa Su\'{a}rez\\[0.3cm]
+    Juan Sebastian Ortega Mu\~{n}oz\\[1.5cm]
+    \textbf{Instructor:} Professor Javier Ivan Toquica Barrera\\[0.5cm]
+    \textbf{Course:} Software Architecture (ARSW)\\[0.3cm]
+    \textbf{Institution:} Escuela Colombiana de Ingenier\'{i}a Julio Garavito\\[2cm]
+}
+
+\date{May 2026}
+
+% ===========================================================================
+\begin{document}
+
+\onecolumn
+\maketitle
+\thispagestyle{empty}
+\newpage
+
+\tableofcontents
+\newpage
+
+% ===========================================================================
+\twocolumn
+% ===========================================================================
+
+% ---------------------------------------------------------------------------
+\section{Objective}
+% ---------------------------------------------------------------------------
+
+This laboratory modernises the classic Azure load-balancing exercise by
+expressing the entire infrastructure as code with \textbf{Terraform}.
+Building on the cloud foundations established in previous laboratories,
+the team designed and provisioned a reproducible deployment that exposes
+two Linux web servers behind a public, Layer-4 \textbf{Azure Load Balancer},
+backs the configuration with a remote, lock-protected Terraform
+\textbf{state}, and integrates a \textbf{GitHub Actions} pipeline that
+authenticates against Azure using \textbf{OpenID Connect} federation
+instead of long-lived secrets.
+
+\begin{conceptbox}[title={Lab \#8 Objectives}]
+\begin{enumerate}
+  \item Model an Azure deployment with Terraform: providers, modules,
+        variables, outputs and remote state.
+  \item Provision a high-availability workload behind a Standard SKU
+        Load Balancer with at least two Linux backends.
+  \item Apply a minimum security baseline: NSG with explicit allow-list,
+        SSH key-only authentication, naming conventions and tags.
+  \item Externalise state to an Azure Storage Account using blob lease
+        locking to prevent concurrent applies.
+  \item Build a CI/CD pipeline in GitHub Actions that performs
+        \texttt{plan} on every pull request and gated \texttt{apply} on
+        manual dispatch, all under OIDC.
+  \item Validate that the LB round-robins traffic across the backends,
+        observe approximate costs and destroy the deployment safely.
+\end{enumerate}
+\end{conceptbox}
+
+% ---------------------------------------------------------------------------
+\section{Target Architecture}
+% ---------------------------------------------------------------------------
+
+The deployment is partitioned into three Terraform modules so that each
+concern is independently versionable and reviewable. A single Resource
+Group acts as the container, which keeps the cleanup operation atomic.
+
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Module} & \textbf{Responsibility} \\
+\midrule
+\texttt{vnet}    & Virtual Network and the \texttt{web} / \texttt{mgmt} subnets. \\
+\texttt{compute} & NICs and Linux VMs bootstrapped by cloud-init. \\
+\texttt{lb}      & Public Load Balancer, health probe, rule and NSG. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{warningbox}
+The choice of \textbf{Layer-4 Load Balancer} over Application Gateway
+(L7) is deliberate. The workload serves identical static HTML over plain
+HTTP, with no path routing, no TLS termination and no WAF requirements.
+A Standard LB delivers sub-millisecond latency and one-tenth of the
+hourly cost of Application Gateway. Should the workload need TLS or
+path-based routing in the future, only the \texttt{lb} module would be
+swapped, leaving \texttt{vnet} and \texttt{compute} untouched. This is
+the precise benefit modular Terraform was designed to deliver.
+\end{warningbox}
+
+\subsection{Component diagram}
+
+The component diagram lives in \texttt{docs/DIAGRAMS.md} and uses
+advanced Mermaid notation (subgraphs, classed nodes, custom theming).
+It captures the four logical layers: identity (Azure AD + OIDC),
+remote state (Storage Account + container + blob lease), workload
+(Resource Group containing VNet, NSG, NICs, VMs and the LB) and the
+external actors (developer CLI, GitHub runner and the end user).
+
+\begin{figure}[H]
+\centering
+\imgplaceholder{6cm}{media/component-diagram.png}
+\caption{Component diagram of the Lab \#8 deployment, including identity
+federation and the remote state backend.}
+\label{fig:component}
+\end{figure}
+
+\subsection{Sequence diagram}
+
+The sequence diagram depicts what happens when an end user issues
+\texttt{curl http://<lb\_public\_ip>}: name resolution, TCP handshake
+intercepted by the LB, 5-tuple hashing that selects a backend NIC, NSG
+acceptance of the inbound \texttt{80/TCP} flow, and the response
+returning back through the same path. A second sequence diagram in the
+same document covers the CI/CD flow with OIDC.
+
+\begin{figure}[H]
+\centering
+\imgplaceholder{6cm}{media/sequence-diagram.png}
+\caption{Request flow through the Public IP, the Load Balancer hash and
+the NSG before the nginx VM responds with the page that embeds the
+hostname.}
+\label{fig:sequence}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Part 1 --- Modular Terraform Code}
+% ---------------------------------------------------------------------------
+
+The root composition wires the three modules together while keeping
+provider configuration centralised in \texttt{providers.tf}. The
+\texttt{azurerm} backend block is intentionally empty, so the actual
+storage configuration is injected at \texttt{terraform init} time via
+\texttt{-backend-config=backend.hcl}, keeping subscription identifiers
+out of source control.
+
+\begin{lstlisting}[style=hclcode, caption={Root composition (\texttt{infra/main.tf}) wiring the three modules}]
+resource "azurerm_resource_group" "rg" {
+  name     = "${var.prefix}-rg"
+  location = var.location
+  tags     = var.tags
+}
+
+module "vnet" {
+  source              = "../modules/vnet"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  prefix              = var.prefix
+  tags                = var.tags
+}
+
+module "compute" {
+  source              = "../modules/compute"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  prefix              = var.prefix
+  admin_username      = var.admin_username
+  ssh_public_key      = file(var.ssh_public_key)
+  subnet_id           = module.vnet.subnet_web_id
+  vm_count            = var.vm_count
+  cloud_init          = file("${path.module}/cloud-init.yaml")
+  tags                = var.tags
+}
+
+module "lb" {
+  source              = "../modules/lb"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  prefix              = var.prefix
+  backend_nic_ids     = module.compute.nic_ids
+  allow_ssh_from_cidr = var.allow_ssh_from_cidr
+  tags                = var.tags
+}
+\end{lstlisting}
+
+\subsection{Variable validation}
+
+Every root variable is typed and validated where it makes sense, so the
+plan fails fast on bad inputs instead of producing partial deployments.
+For example, \texttt{vm\_count} is bounded between 2 and 5 to enforce
+high availability without letting the lab spend run away.
+
+\begin{lstlisting}[style=hclcode, caption={Validated input variables (excerpt of \texttt{infra/variables.tf})}]
+variable "prefix" {
+  type        = string
+  description = "Short identifier prepended to every resource name."
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{1,10}$", var.prefix))
+    error_message = "prefix must be 2-11 lowercase alphanumerics."
+  }
+}
+
+variable "vm_count" {
+  type        = number
+  description = "Number of Linux VMs registered behind the LB."
+  validation {
+    condition     = var.vm_count >= 2 && var.vm_count <= 5
+    error_message = "vm_count must be between 2 and 5."
+  }
+}
+\end{lstlisting}
+
+\subsection{Cloud-init bootstrap}
+
+The Linux VMs install nginx on first boot and write a tiny banner that
+embeds the hostname. This makes the LB round-robin behaviour observable
+end-to-end with a simple \texttt{curl}.
+
+\begin{lstlisting}[style=yamlcode, caption={\texttt{infra/cloud-init.yaml}: nginx installation with hostname banner}]
+#cloud-config
+package_update: true
+packages:
+  - nginx
+runcmd:
+  - echo "<h1>Hello from $(hostname)</h1>" > /var/www/html/index.nginx-debian.html
+  - systemctl enable nginx
+  - systemctl restart nginx
+\end{lstlisting}
+
+% ---------------------------------------------------------------------------
+\section{Part 2 --- Load Balancer \& NSG Module}
+% ---------------------------------------------------------------------------
+
+The \texttt{lb} module is where the design tradeoffs concentrate. It
+provisions a Standard SKU Public IP, a Standard SKU Load Balancer with a
+single public frontend, the backend address pool, the TCP/80 health
+probe, the load balancing rule and the NSG. The NSG is bound at NIC
+level (rather than subnet level) so subsequent tiers can declare their
+own posture without inheritance surprises.
+
+\begin{lstlisting}[style=hclcode, caption={Standard LB, probe, rule and NSG (excerpt of \texttt{modules/lb/main.tf})}]
+resource "azurerm_lb_probe" "probe" {
+  name            = "http-80"
+  loadbalancer_id = azurerm_lb.lb.id
+  protocol        = "Tcp"
+  port            = 80
+}
+
+resource "azurerm_lb_rule" "rule" {
+  name                           = "http-80"
+  loadbalancer_id                = azurerm_lb.lb.id
+  protocol                       = "Tcp"
+  frontend_port                  = 80
+  backend_port                   = 80
+  frontend_ip_configuration_name = "Public"
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.bepool.id]
+  probe_id                       = azurerm_lb_probe.probe.id
+}
+
+resource "azurerm_network_security_group" "nsg" {
+  name                = "${var.prefix}-web-nsg"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  security_rule {
+    name                       = "Allow-HTTP-Internet"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    source_port_range          = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "Allow-SSH-From-Operator"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    destination_port_range     = "22"
+    source_address_prefix      = var.allow_ssh_from_cidr
+    source_port_range          = "*"
+    destination_address_prefix = "*"
+  }
+}
+\end{lstlisting}
+
+\begin{note}
+The Standard SKU was selected over Basic because Public IPs of Standard
+SKU are mandatory for the Standard LB family, and Basic SKU is on the
+deprecation track in Azure since September 2025. Choosing Standard
+preserves availability zone readiness without committing to it on day
+one.
+\end{note}
+
+% ---------------------------------------------------------------------------
+\section{Part 3 --- Remote State \& Locking}
+% ---------------------------------------------------------------------------
+
+Local Terraform state is incompatible with collaborative work: any
+parallel \texttt{apply} would race and corrupt the file. The team
+provisioned a dedicated Storage Account
+(\texttt{sttfstate658} in resource group \texttt{rg-tfstate-lab8}) with
+a single private container (\texttt{tfstate}). Terraform automatically
+acquires a blob lease on the state file before each operation, which
+guarantees mutual exclusion and survives crashed runs (the lease auto-
+expires after one minute).
+
+\begin{lstlisting}[style=shellcode, caption={Bootstrap of the remote state backend (run once)}]
+SUFFIX=$RANDOM
+LOCATION=eastus
+RG=rg-tfstate-lab8
+STO=sttfstate${SUFFIX}
+CONTAINER=tfstate
+
+az group create -n $RG -l $LOCATION
+az storage account create -g $RG -n $STO -l $LOCATION \
+   --sku Standard_LRS --encryption-services blob
+az storage container create --name $CONTAINER --account-name $STO
+\end{lstlisting}
+
+The corresponding \texttt{backend.hcl} (kept out of source control) is
+the only file containing storage names; \texttt{providers.tf} declares
+an empty \texttt{backend "azurerm" \{\}} block that the CLI hydrates at
+init time.
+
+% ---------------------------------------------------------------------------
+\section{Part 4 --- GitHub Actions with OIDC}
+% ---------------------------------------------------------------------------
+
+Storing an Azure Service Principal client secret inside GitHub
+\texttt{Secrets} works, but rotates poorly and exposes a long-lived
+credential on every job log leak. Instead, the team configured
+\textbf{OpenID Connect federation} between GitHub Actions and Azure AD.
+Each workflow run mints a short-lived OIDC JWT, swaps it for an Azure
+AD access token via \texttt{azure/login@v2}, and uses that ephemeral
+token to call ARM and the state Storage Account. The federation trust
+itself lives entirely on the Azure side as an \emph{App Registration
+federated credential} bound to the GitHub repository's OIDC subject.
+
+\begin{lstlisting}[style=yamlcode, caption={Lint + Plan jobs (excerpt of \texttt{.github/workflows/terraform.yml})}]
+permissions:
+  id-token: write       # required for OIDC token request
+  contents: read
+  pull-requests: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: "1.9.5" }
+      - run: terraform fmt -check -recursive
+      - uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - run: terraform init -backend=false
+        working-directory: infra
+      - run: terraform validate -no-color
+        working-directory: infra
+
+  plan:
+    needs: lint
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: "1.9.5" }
+      - uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - working-directory: infra
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.BACKEND_RG }}" \
+            -backend-config="storage_account_name=${{ secrets.BACKEND_SA }}" \
+            -backend-config="container_name=${{ secrets.BACKEND_CONTAINER }}" \
+            -backend-config="key=${{ secrets.BACKEND_KEY }}"
+          terraform plan -var-file=env/dev.tfvars -no-color -out=tfplan
+\end{lstlisting}
+
+\begin{resultbox}[title={Pipeline behaviour}]
+\begin{itemize}
+  \item Every pull request to \texttt{main} runs \texttt{fmt},
+        \texttt{validate} and \texttt{plan}; the plan diff is posted
+        back to the PR as a sticky comment so reviewers see the impact
+        without having to fetch the branch locally.
+  \item The \texttt{apply} and \texttt{destroy} jobs are gated behind
+        the \texttt{production} GitHub Environment, which requires
+        explicit reviewer approval and restricts deployments to the
+        \texttt{main} branch.
+  \item No long-lived secret leaves Azure: the \texttt{azure/login@v2}
+        step exchanges the GitHub OIDC JWT for a 1-hour AAD token.
+\end{itemize}
+\end{resultbox}
+
+% ---------------------------------------------------------------------------
+\section{Part 5 --- Operational Validation}
+% ---------------------------------------------------------------------------
+
+After a successful \texttt{terraform apply}, the team verified the
+deployment end-to-end. Outputs of the recorded run:
+
+\begin{lstlisting}[style=shellcode, caption={Outputs surfaced by the root module after apply}]
+$ terraform output
+lb_public_ip        = "104.211.49.157"
+resource_group_name = "lab8-rg"
+vm_names            = [
+  "lab8-vm-0",
+  "lab8-vm-1",
+]
+\end{lstlisting}
+
+A small loop hitting the Load Balancer six times demonstrates that
+successive requests rotate between both backends, confirming the
+backend pool is healthy and the 5-tuple hash distributes flows as
+expected.
+
+\begin{lstlisting}[style=shellcode, caption={Round-robin verification against the LB Public IP}]
+$ for ($i=0; $i -lt 6; $i++) { curl http://104.211.49.157 }
+<h1>Hello from lab8-vm-0</h1>
+<h1>Hello from lab8-vm-1</h1>
+<h1>Hello from lab8-vm-0</h1>
+<h1>Hello from lab8-vm-1</h1>
+<h1>Hello from lab8-vm-0</h1>
+<h1>Hello from lab8-vm-1</h1>
+\end{lstlisting}
+
+\begin{figure}[H]
+\centering
+\imgplaceholder{4cm}{media/curl-roundrobin.png}
+\caption{Successive curl requests rotating between \texttt{lab8-vm-0}
+and \texttt{lab8-vm-1}, confirming the LB hash distribution.}
+\label{fig:roundrobin}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Security Posture}
+% ---------------------------------------------------------------------------
+
+Even at lab scale, the team applied a baseline that mirrors what would
+be required in production:
+
+\begin{itemize}
+  \item \textbf{NSG with explicit allow-list.} Only 80/TCP from the
+        public Internet (required for the LB) and 22/TCP from the
+        operator's \texttt{/32} are permitted; everything else is
+        denied by default.
+  \item \textbf{SSH key-only authentication.} Password authentication
+        is disabled by the \texttt{azurerm} provider when
+        \texttt{admin\_ssh\_key} is supplied, structurally preventing
+        password spray attacks.
+  \item \textbf{Tagged ephemeral resources.} Every resource carries
+        \texttt{owner}, \texttt{course}, \texttt{env} and
+        \texttt{expires} tags, making cost ownership and cleanup
+        auditable.
+  \item \textbf{No long-lived secret in CI/CD.} The OIDC federation
+        means there is no Service Principal client secret to rotate or
+        leak.
+  \item \textbf{NIC-level NSG attachment.} Avoids subnet-level
+        inheritance pitfalls when adding new tiers.
+\end{itemize}
+
+\begin{warningbox}
+Exposing 22/TCP to the Internet, even restricted to a single \texttt{/32},
+is still an attack surface. For production, the lab leaves
+\texttt{subnet-mgmt} pre-provisioned so \textbf{Azure Bastion} can be
+introduced later, removing public SSH entirely.
+\end{warningbox}
+
+% ---------------------------------------------------------------------------
+\section{Cost Analysis}
+% ---------------------------------------------------------------------------
+
+Approximate East US list prices, validated against the Azure pricing
+calculator on the deployment date:
+
+\begin{center}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Resource} & \textbf{Hourly} & \textbf{Daily} & \textbf{Monthly} \\
+\midrule
+2 $\times$ VM \texttt{Standard\_B1s} & \$0.0104 & \$0.50 & \$15.20 \\
+Standard Load Balancer            & \$0.0250 & \$0.60 & \$18.30 \\
+Standard Public IP (static)       & \$0.0050 & \$0.12 & \$3.70 \\
+Storage Account (state, LRS)      & \$0.0002 & \$0.005 & \$0.15 \\
+\midrule
+\textbf{Total}                    & \textbf{\$0.041} & \textbf{\$1.23} & \textbf{\$37.35} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+An eight-hour development session therefore costs roughly USD \$0.33,
+which fits comfortably inside the USD \$100 Azure for Students credit
+and allows dozens of full lab cycles before the credit is exhausted.
+
+% ---------------------------------------------------------------------------
+\section{Video Evidence}
+% ---------------------------------------------------------------------------
+
+A full demo recording captures the end-to-end execution: backend
+bootstrap, \texttt{terraform init} against the remote backend,
+\texttt{terraform apply}, \texttt{curl} loop verifying round-robin and
+\texttt{terraform destroy} for the cleanup. The video is hosted on
+Google Drive and linked from the repository \texttt{README}:
+
+\begin{resultbox}[title={Demo recording}]
+\textbf{URL:} \url{https://drive.google.com/file/d/1CAY1gmPZbe96VobD-xGRg0q5HYMfCjOu/view}
+\medskip
+
+\noindent The recording showcases:
+\begin{itemize}
+  \item Storage Account / container provisioning for remote state.
+  \item Terraform initialising the AzureRM backend and downloading
+        provider \texttt{azurerm} v4.72.0.
+  \item Successful \texttt{plan} and \texttt{apply} producing the
+        Resource Group, VNet, NICs, VMs, LB and NSG.
+  \item Live \texttt{curl} loop alternating between
+        \texttt{lab8-vm-0} and \texttt{lab8-vm-1}.
+  \item Clean teardown via \texttt{terraform destroy} confirming a
+        zero-leftover state.
+\end{itemize}
+\end{resultbox}
+
+% ---------------------------------------------------------------------------
+\section{Conclusions}
+% ---------------------------------------------------------------------------
+
+\begin{resultbox}[title={Key Findings}]
+\begin{enumerate}
+  \item \textbf{IaC dramatically reduces operational risk.} Replacing
+        portal click-ops with declarative Terraform turned an
+        error-prone, multi-step procedure into a single
+        \texttt{apply}, fully reproducible and reviewable as code.
+        Destroying the deployment is just as deterministic, which is
+        critical for cost control on student credits.
+  \item \textbf{Module decomposition pays off immediately.} Splitting
+        the workload into \texttt{vnet}, \texttt{compute} and
+        \texttt{lb} kept each diff small and surfaced the precise
+        seam at which a future Application Gateway upgrade would land.
+  \item \textbf{OIDC is the right default for cloud CI/CD.} Removing
+        the long-lived Service Principal secret eliminated an entire
+        class of credential-management problems. Federated credentials
+        scoped per branch and per environment make the trust boundary
+        easy to reason about.
+  \item \textbf{Standard L4 LB is the right tool for this workload.}
+        Application Gateway would have multiplied cost and operational
+        surface for routing features we do not consume. The clean
+        module boundary keeps the upgrade path open.
+\end{enumerate}
+\end{resultbox}
+
+\subsection{Lessons Learned}
+
+\begin{itemize}
+  \item Pinning the AzureRM provider via \texttt{.terraform.lock.hcl}
+        is non-negotiable: a minor provider bump silently changed
+        defaults during early experimentation and caused unexpected
+        plan diffs.
+  \item NIC-level NSG attachment is more verbose than subnet-level,
+        but completely avoids the NSG inheritance debugging that
+        wasted time during earlier exercises.
+  \item \texttt{terraform fmt -recursive} should be a pre-commit hook
+        from day one; the CI \texttt{fmt -check} block in the Actions
+        workflow catches drift but the developer feedback loop is
+        much faster locally.
+  \item Validating variables with \texttt{validation} blocks turns the
+        \texttt{plan} step into a spec test: bad input fails before a
+        single Azure API call is issued, which is exactly the
+        feedback loop we want.
+\end{itemize}
+
+% ---------------------------------------------------------------------------
+\section{References}
+% ---------------------------------------------------------------------------
+
+\begin{enumerate}
+  \item HashiCorp. \emph{Terraform Language Documentation}.
+        \url{https://developer.hashicorp.com/terraform/language}
+
+  \item Microsoft Azure. \emph{Azure Load Balancer overview}.
+        \url{https://learn.microsoft.com/en-us/azure/load-balancer/load-balancer-overview}
+
+  \item Microsoft Azure. \emph{Use Azure Storage as a Terraform backend}.
+        \url{https://learn.microsoft.com/en-us/azure/developer/terraform/store-state-in-azure-storage}
+
+  \item Microsoft Azure. \emph{Configure a federated identity credential
+        on an app for GitHub Actions}.
+        \url{https://learn.microsoft.com/en-us/azure/developer/github/connect-from-azure-openid-connect}
+
+  \item HashiCorp. \emph{AzureRM Provider Documentation (v4)}.
+        \url{https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs}
+
+  \item Canonical. \emph{cloud-init Documentation}.
+        \url{https://cloudinit.readthedocs.io/en/latest/}
+
+  \item GitHub Docs. \emph{About security hardening with OpenID Connect}.
+        \url{https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect}
+\end{enumerate}
+
+\end{document}
