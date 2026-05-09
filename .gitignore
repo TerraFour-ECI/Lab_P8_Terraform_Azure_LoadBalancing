@@ -25,7 +25,7 @@ backend.hcl
 
 # Carpeta de caché local
 .terraform/
-.terraform.lock.hcl
+# .terraform.lock.hcl  # incluido en el repo para fijar versiones de providers
 
 # Logs y outputs
 logs/
