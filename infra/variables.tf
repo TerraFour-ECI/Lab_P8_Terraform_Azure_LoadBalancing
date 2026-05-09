@@ -50,3 +50,62 @@ variable "tags" {
   type        = map(string)
   description = "Resource tags propagated to every resource for cost/ownership tracking."
 }
+
+# ---------------------------------------------------------------------------
+#  Optional challenge: Azure Bastion (in subnet-mgmt area)
+# ---------------------------------------------------------------------------
+
+variable "enable_bastion" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    Provision Azure Bastion in a dedicated AzureBastionSubnet. When true,
+    the SSH NSG rule can be removed in production because operators reach
+    the VMs via the Bastion broker over TLS. Disabled by default because
+    Bastion is the most expensive single resource in this lab (~USD
+    0.19/hour for the Basic SKU).
+  EOT
+}
+
+variable "bastion_sku" {
+  type        = string
+  default     = "Basic"
+  description = "Azure Bastion SKU: Basic (cheaper) or Standard (shareable links, scale)."
+
+  validation {
+    condition     = contains(["Basic", "Standard"], var.bastion_sku)
+    error_message = "bastion_sku must be one of Basic, Standard."
+  }
+}
+
+# ---------------------------------------------------------------------------
+#  Optional challenge: Budget alert (Cost Management)
+# ---------------------------------------------------------------------------
+
+variable "enable_budget" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    Provision a monthly Cost Management budget on the lab Resource Group
+    with email notifications at 50/90/100% of `budget_amount_usd`.
+    Budgets themselves are free; the only cost is the email pipeline.
+  EOT
+}
+
+variable "budget_amount_usd" {
+  type        = number
+  default     = 30
+  description = "Monthly budget cap in USD (used only when enable_budget=true)."
+}
+
+variable "budget_contact_emails" {
+  type        = list(string)
+  default     = []
+  description = "Email recipients for budget threshold alerts (used only when enable_budget=true)."
+}
+
+variable "budget_start_date" {
+  type        = string
+  default     = "2026-05-01T00:00:00Z"
+  description = "Start of the budget window. Azure requires the first day of a month."
+}

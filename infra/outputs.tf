@@ -5,6 +5,8 @@
 #  - `resource_group_name` makes destroy/inspection scripts stable.
 #  - `vm_names` is consumed by smoke tests that hit the LB N times to assert
 #    that every backend VM responded at least once.
+#  - `bastion_dns_name` and `budget_name` are conditional outputs from the
+#    optional challenge modules (null when the feature flag is off).
 # =============================================================================
 
 output "lb_public_ip" {
@@ -20,4 +22,14 @@ output "resource_group_name" {
 output "vm_names" {
   description = "Names of the Linux VMs registered in the LB backend pool."
   value       = module.compute.vm_names
+}
+
+output "bastion_dns_name" {
+  description = "FQDN of the Azure Bastion host (null when enable_bastion=false)."
+  value       = try(module.bastion[0].bastion_dns_name, null)
+}
+
+output "budget_name" {
+  description = "Name of the Cost Management budget (null when enable_budget=false)."
+  value       = try(module.budget[0].budget_name, null)
 }

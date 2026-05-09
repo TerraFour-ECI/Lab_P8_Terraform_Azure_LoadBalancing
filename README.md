@@ -89,18 +89,21 @@ flowchart LR
 ```text
 .
 ├─ infra/                        # Root Terraform composition
-│  ├─ main.tf                    # Wires modules together
+│  ├─ main.tf                    # Wires modules together (+ optional challenges)
 │  ├─ providers.tf               # azurerm + remote backend declaration
 │  ├─ variables.tf               # Typed root inputs (validated)
-│  ├─ outputs.tf                 # lb_public_ip, vm_names, rg name
+│  ├─ outputs.tf                 # lb_public_ip, vm_names, rg name (+ challenge outputs)
 │  ├─ cloud-init.yaml            # nginx bootstrap with hostname banner
 │  ├─ backend.hcl.example        # Template for remote state config
 │  └─ env/
-│     └─ dev.tfvars              # Per-environment variable values
+│     ├─ dev.tfvars                       # Base lab values
+│     └─ dev-challenges.tfvars.example    # Overlay enabling Bastion + Budget
 ├─ modules/
-│  ├─ vnet/                      # VNet + subnets
+│  ├─ vnet/                      # VNet + subnets (+ optional AzureBastionSubnet)
 │  ├─ compute/                   # NICs + Linux VMs (cloud-init)
-│  └─ lb/                        # Public LB + NSG
+│  ├─ lb/                        # Public LB + NSG
+│  ├─ bastion/                   # 🎁 Optional: Azure Bastion (no public SSH)
+│  └─ budget/                    # 🎁 Optional: Cost Management budget + alerts
 ├─ .github/
 │  ├─ CODEOWNERS                 # Required reviewers per path
 │  └─ workflows/
@@ -109,10 +112,12 @@ flowchart LR
 │  ├─ DIAGRAMS.md                # Mermaid component + sequence diagrams
 │  ├─ REFLECTION.md              # 1-page technical reflection
 │  ├─ OIDC_SETUP.md              # Step-by-step Azure ↔ GitHub OIDC guide
+│  ├─ CHALLENGES.md              # 🎁 How to enable Bastion + Budget challenges
 │  └─ INSTALL_TERRAFORM.md       # Terraform install / quick start
 └─ report/
    ├─ main.tex                   # LaTeX report (Lab #8)
-   └─ media/                     # Report assets
+   ├─ main.pdf                   # Compiled report (7 pages, embedded diagrams)
+   └─ media/                     # Report assets (diagrams, logos)
 ```
 
 ---
@@ -277,6 +282,11 @@ Highlights captured in the recording:
 * [x] 📄 LaTeX report ([report/main.tex](report/main.tex)).
 * [x] 🎬 Demo video (link above).
 * [x] 🧹 `terraform destroy` executed at the end.
+
+### 🎁 Optional challenges (*Retos*) — implemented
+
+* [x] 🪜 **Azure Bastion** in `subnet-mgmt` area — opt-in via `enable_bastion = true`. See [docs/CHALLENGES.md](docs/CHALLENGES.md).
+* [x] 💰 **Budget alert** with email notifications at 50/90/100% — opt-in via `enable_budget = true`. See [docs/CHALLENGES.md](docs/CHALLENGES.md).
 
 ---
 

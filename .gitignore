@@ -51,11 +51,25 @@ desktop.ini
 *.tgz
 *.bak
 
-# === Python / Aux scripts (opcional) ===
+# === Python / Aux scripts (optional) ===
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# === LaTeX (report/) auxiliary outputs ===
+# Keep main.tex and main.pdf; everything else is regeneratable from pdflatex.
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.lof
+report/*.lot
+report/*.fls
+report/*.fdb_latexmk
+report/*.synctex.gz
+report/*.bbl
+report/*.blg
 
 # === Seguridad ===
 # Llaves privadas y credenciales

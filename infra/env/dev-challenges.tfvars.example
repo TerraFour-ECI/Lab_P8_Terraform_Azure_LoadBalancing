@@ -1,0 +1,28 @@
+# =============================================================================
+#  Optional challenges layer (overlays env/dev.tfvars)
+# -----------------------------------------------------------------------------
+#  Copy this file to env/dev-challenges.tfvars (already in .gitignore) and
+#  apply with BOTH var-files:
+#
+#      terraform apply \
+#          -var-file=env/dev.tfvars \
+#          -var-file=env/dev-challenges.tfvars
+#
+#  Splitting it like this keeps the cheap base lab independent from the
+#  Bastion charges (~USD 0.19/h) and the budget alert recipients.
+# =============================================================================
+
+# --- Challenge #1: Azure Bastion ---
+enable_bastion = true
+bastion_sku    = "Basic"   # or "Standard" for shareable links
+
+# --- Challenge #2: Budget alert ---
+enable_budget         = true
+budget_amount_usd     = 30
+budget_contact_emails = [
+  "andersson.sanchez@example.edu",
+  "cristian.pedraza@example.edu",
+  "elizabeth.correa@example.edu",
+  "juan.ortega@example.edu",
+]
+budget_start_date     = "2026-05-01T00:00:00Z"

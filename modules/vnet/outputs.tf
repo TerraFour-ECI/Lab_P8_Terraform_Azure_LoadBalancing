@@ -15,6 +15,11 @@ output "subnet_web_id" {
 }
 
 output "subnet_mgmt_id" {
-  description = "Resource ID of the management subnet (reserved for Bastion)."
+  description = "Resource ID of the management subnet."
   value       = azurerm_subnet.mgmt.id
+}
+
+output "subnet_bastion_id" {
+  description = "Resource ID of the AzureBastionSubnet (null when enable_bastion_subnet=false)."
+  value       = try(azurerm_subnet.bastion[0].id, null)
 }

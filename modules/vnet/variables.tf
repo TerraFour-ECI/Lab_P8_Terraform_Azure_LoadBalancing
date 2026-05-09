@@ -21,3 +21,14 @@ variable "tags" {
   type        = map(string)
   description = "Tags propagated to the VNet for ownership and cost tracking."
 }
+
+variable "enable_bastion_subnet" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    When true, provisions an additional `AzureBastionSubnet` (10.10.3.0/26).
+    The subnet name is mandated by Azure and cannot be customised. Required
+    by the optional `bastion` module — leave false unless you also enable
+    that module.
+  EOT
+}

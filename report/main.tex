@@ -9,6 +9,8 @@
 % --- Encoding & language ---------------------------------------------------
 \usepackage[utf8]{inputenc}
 \usepackage[english]{babel}
+\usepackage{lmodern}      % Scalable Latin Modern fonts (microtype expansion)
+\usepackage[T1]{fontenc}
 
 % --- Maths -----------------------------------------------------------------
 \usepackage{amsmath}
@@ -288,37 +290,56 @@ the precise benefit modular Terraform was designed to deliver.
 
 \subsection{Component diagram}
 
-The component diagram lives in \texttt{docs/DIAGRAMS.md} and uses
-advanced Mermaid notation (subgraphs, classed nodes, custom theming).
-It captures the four logical layers: identity (Azure AD + OIDC),
-remote state (Storage Account + container + blob lease), workload
-(Resource Group containing VNet, NSG, NICs, VMs and the LB) and the
-external actors (developer CLI, GitHub runner and the end user).
+The component diagram (Figure~\ref{fig:component}) is rendered with
+\textbf{advanced Mermaid notation} (subgraphs, classed nodes, custom
+theming) and captures the four logical layers of the deployment:
+identity (Azure AD + OIDC), remote state (Storage Account + container
++ blob lease), workload (Resource Group containing VNet, NSG, NICs,
+VMs and the LB) and the external actors (developer CLI, GitHub runner
+and the end user). The full Mermaid source lives in
+\texttt{docs/DIAGRAMS.md}.
 
 \begin{figure}[H]
 \centering
-\imgplaceholder{6cm}{media/component-diagram.png}
-\caption{Component diagram of the Lab \#8 deployment, including identity
-federation and the remote state backend.}
+\imgplaceholder{7cm}{media/component-diagram.png}
+\caption{Component diagram of the Lab \#8 deployment: identity
+federation, remote state backend, edge layer and load-balanced VMs.}
 \label{fig:component}
 \end{figure}
 
-\subsection{Sequence diagram}
+\subsection{Sequence diagram --- end-user request}
 
-The sequence diagram depicts what happens when an end user issues
-\texttt{curl http://<lb\_public\_ip>}: name resolution, TCP handshake
-intercepted by the LB, 5-tuple hashing that selects a backend NIC, NSG
-acceptance of the inbound \texttt{80/TCP} flow, and the response
-returning back through the same path. A second sequence diagram in the
-same document covers the CI/CD flow with OIDC.
+Figure~\ref{fig:seq-enduser} depicts what happens when an end user
+issues \texttt{curl http://<lb\_public\_ip>}: name resolution, TCP
+handshake intercepted by the LB, 5-tuple hashing that selects a
+backend NIC, NSG acceptance of the inbound \texttt{80/TCP} flow, and
+the response returning back through the same path. The diagram also
+visualises the periodic TCP/80 health probes that keep the backend
+pool membership accurate.
 
 \begin{figure}[H]
 \centering
-\imgplaceholder{6cm}{media/sequence-diagram.png}
-\caption{Request flow through the Public IP, the Load Balancer hash and
-the NSG before the nginx VM responds with the page that embeds the
-hostname.}
-\label{fig:sequence}
+\imgplaceholder{7cm}{media/sequence-diagram-end-user.png}
+\caption{Request flow through the Public IP, the Load Balancer
+5-tuple hash and the NSG before the nginx VM responds with the page
+that embeds its hostname.}
+\label{fig:seq-enduser}
+\end{figure}
+
+\subsection{Sequence diagram --- CI/CD with OIDC}
+
+Figure~\ref{fig:seq-cicd} complements the previous one by showing the
+operational path: an engineer triggers a workflow, GitHub mints a
+short-lived OIDC JWT, Azure AD swaps it for an access token, the
+runner acquires a blob lease on the state file, runs Terraform against
+ARM and finally posts the plan back to the PR.
+
+\begin{figure}[H]
+\centering
+\imgplaceholder{7cm}{media/sequence-diagram-ci-cd.png}
+\caption{CI/CD sequence: GitHub Actions trades the OIDC JWT for an
+Azure AD token, locks the remote state and runs Terraform.}
+\label{fig:seq-cicd}
 \end{figure}
 
 % ---------------------------------------------------------------------------
@@ -623,14 +644,6 @@ $ for ($i=0; $i -lt 6; $i++) { curl http://104.211.49.157 }
 <h1>Hello from lab8-vm-1</h1>
 \end{lstlisting}
 
-\begin{figure}[H]
-\centering
-\imgplaceholder{4cm}{media/curl-roundrobin.png}
-\caption{Successive curl requests rotating between \texttt{lab8-vm-0}
-and \texttt{lab8-vm-1}, confirming the LB hash distribution.}
-\label{fig:roundrobin}
-\end{figure}
-
 % ---------------------------------------------------------------------------
 \section{Security Posture}
 % ---------------------------------------------------------------------------
@@ -691,6 +704,97 @@ Storage Account (state, LRS)      & \$0.0002 & \$0.005 & \$0.15 \\
 An eight-hour development session therefore costs roughly USD \$0.33,
 which fits comfortably inside the USD \$100 Azure for Students credit
 and allows dozens of full lab cycles before the credit is exhausted.
+
+% ---------------------------------------------------------------------------
+\section{Optional Challenges Implemented}
+% ---------------------------------------------------------------------------
+
+The lab guide lists five optional challenges (\emph{Retos}) and asks
+students to pick two or more. The team implemented two of them as
+\textbf{opt-in modules behind feature flags}, so the cheap base lab
+remains untouched and the additional resources only spin up when the
+team explicitly enables them. The full enable/disable procedure is
+documented in \texttt{docs/CHALLENGES.md}.
+
+\subsection{Challenge \#1 --- Azure Bastion (no public SSH)}
+
+The first challenge eliminates the public 22/TCP attack surface on the
+workload VMs. When \texttt{enable\_bastion = true}, the \texttt{vnet}
+module provisions an additional subnet named exactly
+\texttt{AzureBastionSubnet} (\texttt{10.10.3.0/26}, both name and
+minimum size mandated by Azure), and a new \texttt{bastion} module
+deploys a Standard SKU Public IP plus the
+\texttt{azurerm\_bastion\_host} itself. Operators reach the VMs by
+clicking \emph{Connect $\rightarrow$ Bastion} in the Azure portal, which
+brokers SSH/RDP over TLS without ever exposing port 22 to the Internet.
+
+\begin{lstlisting}[style=hclcode, caption={Bastion module wired through a feature flag (\texttt{infra/main.tf})}]
+module "bastion" {
+  count               = var.enable_bastion ? 1 : 0
+  source              = "../modules/bastion"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  prefix              = var.prefix
+  subnet_id           = module.vnet.subnet_bastion_id
+  sku                 = var.bastion_sku
+  tags                = var.tags
+}
+\end{lstlisting}
+
+\begin{warningbox}
+Azure Bastion is the most expensive single resource in this lab
+(approximately USD \$0.19/hour for the Basic SKU). The team kept the
+flag disabled by default so a forgotten \texttt{terraform apply} cannot
+silently drain the student credit; production deployments would also
+remove the \texttt{Allow-SSH-From-Operator} NSG rule entirely once
+Bastion is in place.
+\end{warningbox}
+
+\subsection{Challenge \#2 --- Cost Management budget with email alerts}
+
+The second challenge installs a hard \emph{guardrail against runaway
+spend}: a Cost Management budget scoped to the lab Resource Group with
+three notification thresholds (50\,\%, 90\,\% and 100\,\% of the
+configured monthly cap), all evaluated on \emph{Actual} cost rather
+than \emph{Forecast} to avoid noisy notifications during the first few
+days of the month. Budgets themselves are free; the only added cost is
+the email pipeline (also free).
+
+\begin{lstlisting}[style=hclcode, caption={Budget module: three notifications, gated by feature flag}]
+module "budget" {
+  count             = var.enable_budget ? 1 : 0
+  source            = "../modules/budget"
+  prefix            = var.prefix
+  resource_group_id = azurerm_resource_group.rg.id
+  amount_usd        = var.budget_amount_usd
+  contact_emails    = var.budget_contact_emails
+  start_date        = var.budget_start_date
+}
+
+# inside modules/budget/main.tf:
+notification {
+  enabled        = true
+  threshold      = 50
+  operator       = "GreaterThan"
+  threshold_type = "Actual"
+  contact_emails = var.contact_emails
+}
+\end{lstlisting}
+
+\begin{resultbox}[title={Why these two challenges?}]
+\begin{itemize}
+  \item \textbf{Bastion} attacks the largest residual security risk in
+        the base architecture (the public SSH surface) without
+        introducing a new technology stack to the team.
+  \item \textbf{Budget alert} adds operational maturity at zero
+        marginal cost --- the perfect ergonomics win for a lab whose
+        primary financial constraint is a fixed student credit.
+  \item Both are wired with \texttt{count = var.enable\_X ? 1 : 0},
+        which keeps the \texttt{terraform plan} for the base lab
+        byte-identical to the pre-challenge version when the flags
+        are off.
+\end{itemize}
+\end{resultbox}
 
 % ---------------------------------------------------------------------------
 \section{Video Evidence}

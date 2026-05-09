@@ -4,11 +4,11 @@
 #  Provisions a single VNet with two purpose-driven subnets:
 #
 #    subnet-web   (10.10.1.0/24) -> hosts the load-balanced VMs.
-#    subnet-mgmt  (10.10.2.0/24) -> reserved for Azure Bastion or jump hosts
-#                                   in a production hardening exercise.
+#    subnet-mgmt  (10.10.2.0/24) -> reserved for future jump hosts.
 #
-#  Address ranges are intentionally non-overlapping with the typical Azure
-#  default ranges so peering with another VNet stays painless.
+#  When `var.enable_bastion_subnet` is true, an additional subnet named
+#  `AzureBastionSubnet` (10.10.3.0/26) is created. Azure requires this
+#  exact name and a minimum size of /26 for any Bastion deployment.
 # =============================================================================
 
 resource "azurerm_virtual_network" "vnet" {
@@ -31,4 +31,14 @@ resource "azurerm_subnet" "mgmt" {
   resource_group_name  = var.resource_group_name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = ["10.10.2.0/24"]
+}
+
+# AzureBastionSubnet — name and minimum size /26 are enforced by Azure.
+# Created on demand so the base lab stays cheap; consumed by modules/bastion.
+resource "azurerm_subnet" "bastion" {
+  count                = var.enable_bastion_subnet ? 1 : 0
+  name                 = "AzureBastionSubnet"
+  resource_group_name  = var.resource_group_name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+  address_prefixes     = ["10.10.3.0/26"]
 }
