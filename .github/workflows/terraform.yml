@@ -1,0 +1,251 @@
+# =============================================================================
+#  Lab #8 — Terraform CI/CD with Azure OIDC (no long-lived secrets)
+# -----------------------------------------------------------------------------
+#  - On every PR targeting `main`: run fmt, validate and plan against the
+#    `dev` workspace and post the plan as a sticky comment.
+#  - On manual dispatch: run apply with explicit environment approval.
+#  - On manual dispatch (destroy=true): run destroy after approval.
+#
+#  Authentication uses OpenID Connect (OIDC) federation between GitHub and
+#  Azure AD, so no client secret ever leaves Azure. Required GitHub repo
+#  variables / secrets:
+#
+#       AZURE_CLIENT_ID         (federated app registration's appId)
+#       AZURE_TENANT_ID
+#       AZURE_SUBSCRIPTION_ID
+#       BACKEND_RG              (rg-tfstate-lab8)
+#       BACKEND_SA              (sttfstate658)
+#       BACKEND_CONTAINER       (tfstate)
+#       BACKEND_KEY             (lab8/terraform.tfstate)
+# =============================================================================
+
+name: Terraform CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - "modules/**"
+      - ".github/workflows/terraform.yml"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action to perform"
+        required: true
+        default: "plan"
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+permissions:
+  id-token: write       # Required for OIDC token request to Azure AD
+  contents: read        # Required to checkout the repo
+  pull-requests: write  # Required to comment the plan on PRs
+
+env:
+  TF_VERSION: "1.9.5"
+  TF_WORKING_DIR: infra
+  TF_VAR_FILE: env/dev.tfvars
+  ARM_USE_OIDC: "true"
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+jobs:
+  # ─── Static checks: fmt + validate ─────────────────────────────────────────
+  lint:
+    name: Lint (fmt + validate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform fmt (recursive, check only)
+        run: terraform fmt -check -recursive
+        working-directory: .
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Newer Terraform versions (>=1.10) validate the backend block even
+      # when -backend=false is passed, so we initialise against the real
+      # backend even for the lint job. The OIDC token is already minted in
+      # the previous step.
+      - name: Terraform Init (remote backend)
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.BACKEND_RG }}" \
+            -backend-config="storage_account_name=${{ secrets.BACKEND_SA }}" \
+            -backend-config="container_name=${{ secrets.BACKEND_CONTAINER }}" \
+            -backend-config="key=${{ secrets.BACKEND_KEY }}"
+
+      - name: Terraform Validate
+        run: terraform validate -no-color
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+  # ─── Plan on every PR; comment results back ────────────────────────────────
+  plan:
+    name: Plan (PR)
+    needs: lint
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'plan')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init (remote backend)
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.BACKEND_RG }}" \
+            -backend-config="storage_account_name=${{ secrets.BACKEND_SA }}" \
+            -backend-config="container_name=${{ secrets.BACKEND_CONTAINER }}" \
+            -backend-config="key=${{ secrets.BACKEND_KEY }}"
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform plan \
+            -var-file="${{ env.TF_VAR_FILE }}" \
+            -no-color \
+            -out=tfplan | tee plan.txt
+          terraform show -no-color tfplan > plan_full.txt
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: |
+            ${{ env.TF_WORKING_DIR }}/tfplan
+            ${{ env.TF_WORKING_DIR }}/plan_full.txt
+          retention-days: 7
+
+      - name: Comment plan on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync(
+              '${{ env.TF_WORKING_DIR }}/plan_full.txt', 'utf8'
+            ).slice(0, 60000);
+            const body = [
+              '### Terraform Plan',
+              '',
+              '<details><summary>Click to expand the plan</summary>',
+              '',
+              '```hcl',
+              plan,
+              '```',
+              '',
+              '</details>',
+              '',
+              `_Triggered by @${context.actor} on \`${context.sha.substring(0,7)}\`_`
+            ].join('\n');
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
+  # ─── Apply on manual dispatch (with approval) ──────────────────────────────
+  apply:
+    name: Apply (manual)
+    needs: lint
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://portal.azure.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init (remote backend)
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.BACKEND_RG }}" \
+            -backend-config="storage_account_name=${{ secrets.BACKEND_SA }}" \
+            -backend-config="container_name=${{ secrets.BACKEND_CONTAINER }}" \
+            -backend-config="key=${{ secrets.BACKEND_KEY }}"
+
+      - name: Terraform Apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -var-file="${{ env.TF_VAR_FILE }}" -auto-approve
+
+      - name: Show outputs
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform output
+
+  # ─── Destroy on manual dispatch (with approval) ────────────────────────────
+  destroy:
+    name: Destroy (manual)
+    needs: lint
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init (remote backend)
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.BACKEND_RG }}" \
+            -backend-config="storage_account_name=${{ secrets.BACKEND_SA }}" \
+            -backend-config="container_name=${{ secrets.BACKEND_CONTAINER }}" \
+            -backend-config="key=${{ secrets.BACKEND_KEY }}"
+
+      - name: Terraform Destroy
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform destroy -var-file="${{ env.TF_VAR_FILE }}" -auto-approve

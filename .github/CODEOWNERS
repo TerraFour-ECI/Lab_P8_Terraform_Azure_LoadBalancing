@@ -1,0 +1,13 @@
+# =============================================================================
+#  CODEOWNERS — required reviewers
+# -----------------------------------------------------------------------------
+#  GitHub uses this file to auto-request reviews when a PR touches matching
+#  paths. The lab instructor is set as default owner of the entire repo.
+# =============================================================================
+
+*                       @javi-toquica
+
+# Infrastructure code requires the whole team to review
+/infra/                 @AnderssonProgramming @cris-eci @Eliza-05 @Juanseom
+/modules/               @AnderssonProgramming @cris-eci @Eliza-05 @Juanseom
+/.github/workflows/     @AnderssonProgramming @cris-eci @Eliza-05 @Juanseom
