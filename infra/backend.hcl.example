@@ -1,4 +1,12 @@
+# =============================================================================
+#  Remote backend configuration template
+# -----------------------------------------------------------------------------
+#  Copy this file to `backend.hcl` (already in .gitignore) and fill in the
+#  storage account that holds your Terraform state. The container and key
+#  must already exist; create them once with the bootstrap commands in the
+#  README.
+# =============================================================================
 resource_group_name  = "rg-tfstate-lab8"
-storage_account_name = "sttfstate<UNICO>"
+storage_account_name = "sttfstate<UNIQUE_SUFFIX>"
 container_name       = "tfstate"
 key                  = "lab8/terraform.tfstate"

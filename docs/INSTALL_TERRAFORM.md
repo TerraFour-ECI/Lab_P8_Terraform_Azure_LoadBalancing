@@ -1,122 +1,146 @@
-# 🧭 Manual de Instalación de Terraform  
-**Curso:** BluePrints / ARSW  
-**Objetivo:** Configurar el entorno local para ejecutar y probar Terraform con Azure.
+# 🧭 Terraform Installation Guide
+
+> **Course:** BluePrints / ARSW · **Goal:** Set up your local environment
+> to run and test Terraform against Azure.
 
 ---
 
-## 🧰 1. Requisitos previos
+## 🧰 1. Prerequisites
 
-Antes de instalar Terraform asegúrate de tener:
-- Cuenta activa en **Azure** (puede ser Azure for Students).  
-- Instalado el **Azure CLI** (`az`).  
-- Acceso a **Git** y **GitHub**.  
-- Conectividad a Internet y permisos de administrador en tu máquina.
+Before installing Terraform make sure you have:
+
+* ☁️ An active **Azure** account (Azure for Students works fine).
+* 🛠️ The **Azure CLI** (`az`) installed and authenticated.
+* 🐙 Access to **Git** and **GitHub**.
+* 🌐 Internet connectivity and admin rights on your machine.
 
 ---
 
-## 🍎 2. Instalación en macOS
+## 🍎 2. Install on macOS
 
-### Opción 1 — vía Homebrew (recomendada)
+### Option 1 — via Homebrew (recommended)
+
 ```bash
 brew update
 brew install terraform
 ```
 
-### Verificar instalación
+### Verify the installation
+
 ```bash
 terraform -version
 ```
 
-**Ejemplo de salida:**
-```
+**Sample output:**
+
+```text
 Terraform v1.9.5
 on darwin_arm64
 ```
 
-### Actualizar Terraform
+### Update Terraform
+
 ```bash
 brew upgrade terraform
 ```
 
-> 💡 Si usas Mac con chip M1/M2/M3, Homebrew instala automáticamente la versión ARM.
+> 💡 On Apple Silicon (M1/M2/M3) Homebrew installs the ARM build
+> automatically.
 
 ---
 
-## 🐧 3. Instalación en Linux (Ubuntu/Debian)
+## 🐧 3. Install on Linux (Ubuntu/Debian)
 
-### Paso 1 — Instalar dependencias
+### Step 1 — Install dependencies
+
 ```bash
 sudo apt-get update && sudo apt-get install -y gnupg software-properties-common curl
 ```
 
-### Paso 2 — Agregar el repositorio oficial
+### Step 2 — Add the official HashiCorp repository
+
 ```bash
 curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
 sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
 ```
 
-### Paso 3 — Instalar Terraform
+### Step 3 — Install Terraform
+
 ```bash
 sudo apt-get update && sudo apt-get install terraform -y
 ```
 
-### Verificar instalación
+### Verify the installation (Linux)
+
 ```bash
 terraform -version
 ```
 
-**Salida esperada:**
-```
+**Expected output:**
+
+```text
 Terraform v1.9.x
 ```
 
-### Actualizar
+### Update
+
 ```bash
 sudo apt-get update && sudo apt-get upgrade terraform -y
 ```
 
 ---
 
-## 🪟 4. Instalación en Windows
+## 🪟 4. Install on Windows
 
-### Opción 1 — Con Winget (Windows 10/11)
+### Option 1 — Winget (Windows 10/11)
+
 ```powershell
 winget install HashiCorp.Terraform
 ```
 
-### Opción 2 — Manual (ZIP)
-1. Descarga el ZIP desde [Terraform Downloads](https://developer.hashicorp.com/terraform/downloads).  
-2. Extrae el contenido en `C:\terraform`.  
-3. Agrega esa ruta al **PATH** del sistema.  
-4. Abre PowerShell y valida:
+### Option 2 — Manual (ZIP)
+
+1. Download the ZIP from
+   [Terraform Downloads](https://developer.hashicorp.com/terraform/downloads).
+2. Extract to `C:\terraform`.
+3. Add that path to the system **PATH**.
+4. Open PowerShell and verify:
+
 ```powershell
 terraform -version
 ```
 
-> ⚠️ Si el comando no se reconoce, revisa el PATH o reinicia tu sesión.
+> ⚠️ If the command is not recognised, double-check `PATH` or restart
+> your shell session.
 
 ---
 
-## ☁️ 5. Autenticación con Azure
+## ☁️ 5. Authenticate to Azure
 
-Conéctate a Azure:
+Sign in:
+
 ```bash
 az login
 ```
-Verifica la suscripción activa:
+
+Verify the active subscription:
+
 ```bash
 az account show
 ```
-Selecciona la correcta (si tienes varias):
+
+Switch subscription if you have several:
+
 ```bash
 az account set --subscription "<SUBSCRIPTION_ID>"
 ```
 
 ---
 
-## 🧩 6. Inicializar un proyecto Terraform
+## 🧩 6. Initialise a Terraform project
 
-Dentro de la carpeta `infra/`:
+From inside the `infra/` folder:
+
 ```bash
 terraform init
 terraform fmt -recursive
@@ -125,39 +149,52 @@ terraform plan -out plan.tfplan
 terraform apply "plan.tfplan"
 ```
 
+For the lab specifically, use the remote backend:
+
+```bash
+terraform init -backend-config=backend.hcl
+terraform plan  -var-file=env/dev.tfvars
+terraform apply -var-file=env/dev.tfvars -auto-approve
+```
+
 ---
 
-## 🧼 7. Desinstalar
+## 🧼 7. Uninstall
 
-**macOS:**  
+**macOS:**
+
 ```bash
 brew uninstall terraform
 ```
 
-**Linux:**  
+**Linux:**
+
 ```bash
 sudo apt-get remove terraform -y
 ```
 
-**Windows:**  
+**Windows:**
+
 ```powershell
 winget uninstall HashiCorp.Terraform
 ```
 
 ---
 
-## 🧠 Errores comunes
+## 🧠 Common errors
 
-| Error | Causa | Solución |
-|-------|--------|----------|
-| `terraform: command not found` | PATH no configurado | Agregar binario al PATH o reinstalar |
-| `az login` falla | CLI desactualizado | Ejecuta `az upgrade` |
-| `Insufficient privileges` | Sin permisos sobre la suscripción | Solicita rol “Contributor” |
-| `Error acquiring state lock` | Backend mal configurado | Verifica contenedor de Azure Storage (tfstate) |
+| Error                            | Cause                                   | Fix                                                  |
+| :------------------------------- | :-------------------------------------- | :--------------------------------------------------- |
+| `terraform: command not found`   | PATH not configured                     | Add the binary to PATH or reinstall                  |
+| `az login` fails                 | Outdated Azure CLI                      | Run `az upgrade`                                     |
+| `Insufficient privileges`        | No permissions on the subscription      | Request the **Contributor** role                     |
+| `Error acquiring state lock`     | Backend misconfigured / stuck blob lease| Validate the Azure Storage container (`tfstate`)     |
+| `BlobAlreadyExists` on init      | Old state left behind                   | Inspect the container and remove conflicting blobs   |
 
 ---
 
-## 📘 Referencias oficiales
-- [Terraform CLI Installation Guide](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli)
-- [Azure Provider Docs](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
-- [Azure CLI Docs](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
+## 📘 Official references
+
+* [Terraform CLI Installation Guide](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli)
+* [Azure Provider Docs](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
+* [Azure CLI Docs](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
